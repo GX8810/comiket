@@ -103,22 +103,22 @@ document.addEventListener("change",e=>{if(e.target.id==="ev"){ev=e.target.value;
 $("exp").onclick=()=>{$("io").value=JSON.stringify(data);$("io").select()};
 $("imp").onclick=()=>{try{const a=JSON.parse($("io").value);if(!Array.isArray(a))throw 0;if(confirm("現在のデータを置き換えますか？")){data=a;data.forEach(d=>{if(!d.ev)d.ev="C109"});store();render()}}catch(e){alert("読み込めませんでした。書き出した文字列をそのまま貼り付けてください。")}};
 
-const kata=s=>s.replace(/[ぁ-ん]/g,c=>String.fromCharCode(c.charCodeAt(0)+96));
-const hira=s=>s.replace(/[ァ-ン]/g,c=>String.fromCharCode(c.charCodeAt(0)-96));
 function parseSp(sp){
  const s=sp.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[\s\-－ー]/g,"");
  const m=s.match(/^(東|西|南)(\d)?([ァ-ンぁ-んA-Za-z])(\d{1,3})?/);if(!m)return null;
- const h=m[1],hn=m[2]?+m[2]:0,b=m[3],al=/[A-Za-z]/.test(b),num=m[4]?+m[4]:0;
- if(h==="東"){if(hn>=4&&hn<=6)return{img:"e456",blk:al?b.toUpperCase():kata(b),num,hn,hall:"東4〜6"};return al?{img:"e7",blk:b.toUpperCase(),num,hn}:{img:"e123",blk:kata(b),num,hn}}
- if(h==="西")return al?null:{img:"w12",blk:hira(b),num,hn};
- return al?{img:"s12",blk:b.toLowerCase(),num,hn}:null;
+ const h=m[1],hn=m[2]?+m[2]:0,blk=m[3],al=/[A-Za-z]/.test(blk),num=m[4]?+m[4]:0;
+ let img;
+ if(h==="東"){if(hn>=1&&hn<=3)img="e123";else if(hn>=4&&hn<=6)img="e456";else if(hn===7)img="e7";else img=al?"e7":"e123"}
+ else img=h==="西"?"w12":"s12";
+ return{img,blk,num,hn,hall:(hn>=4&&hn<=6)?"東4〜6":""};
 }
 function locate(c){
  const L=LAYOUT[c.ev],p=parseSp(c.sp||"");
  if(!L)return{err:"このイベントの会場マップはまだ登録されていません。"};
  if(p&&p.err)return{err:p.err};
  if(p&&!L[p.img])return{err:"このイベントの"+(p.hall||"該当ホール")+"の地図はまだ登録されていません。"};
- if(!p||!L[p.img].pins[p.blk])return{err:"配置から地図上の位置を判別できませんでした。\n例: 東7-A35ab / 東2-ヨ05b / 西1-ふ03a / 南1-p33b の形で入力してください。"};
+ if(!p)return{err:"配置を読み取れませんでした。\n例: 東7-A35ab / 東2-ヨ05b / 西1-ふ03a / 南1-p33b の形で入力してください。"};
+ if(!L[p.img].pins[p.blk])return{err:"ブロック名「"+p.blk+"」がこのホールの地図にありません。\n大文字・小文字・ひらがな・カタカナを確認してください。\n（東1〜3=カタカナ、東7=大文字、西=ひらがな、南=小文字）"};
  const S=((SPACES[c.ev]||{})[p.img]||{})[p.blk];
  if(S&&p.num>=1&&p.num<=S.nr*2){const r=p.num<=S.nr;return{p,exact:true,pts:[[r?S.xr:S.xl,S.ys[r?S.nr-p.num:p.num-S.nr-1]]]}}
  let pts=L[p.img].pins[p.blk],f;
