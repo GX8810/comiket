@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>コミケ買い物リスト</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1b1f2a;--sub:#667;--ac:#2563eb;--bd:#dde;--ok:#16a34a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12141a;--card:#1d212b;--tx:#eceef4;--sub:#9aa;--ac:#6ea0ff;--bd:#333a48;--ok:#4ade80;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:640px;margin:0 auto;padding:12px}
+h1{font-size:18px;margin:4px 0 10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+input,select,textarea,button{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px;max-width:100%}
+input,select{width:100%;box-sizing:border-box;margin:3px 0}
+.row{display:flex;gap:6px}.row>*{flex:1;min-width:0}
+button{cursor:pointer}.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+.tabs{display:flex;gap:6px;margin:8px 0}.tabs button{flex:1}.tabs .on{background:var(--ac);color:#fff}
+.item{display:flex;gap:10px;align-items:flex-start}.item.done{opacity:.5}.item.done .nm{text-decoration:line-through}
+.item input[type=checkbox]{width:24px;height:24px;margin-top:3px}
+.sp{font-weight:700;color:var(--ac)}.sub{color:var(--sub);font-size:13px}
+a{color:var(--ac)}.hall{font-size:13px;color:var(--sub);margin:12px 4px 4px;font-weight:700}
+.sm{padding:4px 8px;font-size:13px}
+details summary{cursor:pointer;font-weight:700}
+</style></head><body><main>
+<h1>📚 コミケ買い物リスト</h1>
+<div class="card"><div class="sub">イベント</div><select id="ev"></select></div>
+<div class="card"><details id="addbox" open><summary id="addttl">サークルを追加</summary>
+<input id="nm" placeholder="サークル名（必須）">
+<div class="row"><select id="day"><option>1日目</option><option>2日目</option><option>3日目</option><option>4日目</option></select>
+<input id="sp" placeholder="配置 例: 東A12a"></div>
+<input id="xid" placeholder="X(Twitter) ID 例: @example（任意）">
+<input id="memo" placeholder="メモ・買いたい物・予算（任意）">
+<div class="row"><button class="pri" id="save">追加</button><button id="cancel" hidden>編集をやめる</button></div>
+</details></div>
+<div class="tabs" id="tabs"></div>
+<input id="q" placeholder="🔍 検索（サークル名・配置・メモ）">
+<div id="list"></div>
+<div class="card"><details><summary>データの移行・バックアップ</summary>
+<p class="sub">データはこの端末のブラウザにだけ保存されます。PCからスマホへ移すには、PCで「書き出し」→表示された文字列をコピー→スマホで貼り付けて「読み込み」。</p>
+<div class="row"><button id="exp">書き出し</button><button id="imp">読み込み</button></div>
+<textarea id="io" rows="4" style="width:100%;box-sizing:border-box;margin-top:6px"></textarea>
+</details></div>
+</main>
+<script>
+const EVENTS=[{id:"C109",name:"C109（冬コミ）"}];
+const K="comiket-list-v1",KE="comiket-event-v1";let data=[],tab="all",edit=null,ev=EVENTS[EVENTS.length-1].id;
+try{data=JSON.parse(localStorage.getItem(K)||"[]")}catch(e){data=[]}
+data.forEach(d=>{if(!d.ev)d.ev=EVENTS[0].id});
+try{const s=localStorage.getItem(KE);if(s&&EVENTS.some(x=>x.id===s))ev=s}catch(e){}
+const $=id=>document.getElementById(id);
+const store=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const norm=s=>s.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).toUpperCase().replace(/\s/g,"");
+const hallOf=s=>{const m=norm(s).match(/^(東|西|南)/);return m?m[1]+"ホール":"配置未設定"};
+function render(){
+ $("ev").innerHTML=EVENTS.map(x=>`<option value="${x.id}" ${x.id===ev?"selected":""}>${x.name}（${data.filter(d=>d.ev===x.id).length}件）</option>`).join("");
+ const days=[...new Set(data.filter(d=>d.ev===ev).map(d=>d.day))].sort();
+ $("tabs").innerHTML=["all",...days].map(t=>`<button class="${t===tab?"on":""}" data-t="${t}">${t==="all"?"すべて":t}</button>`).join("");
+ const q=$("q").value.trim().toLowerCase();
+ let L=data.filter(d=>d.ev===ev&&(tab==="all"||d.day===tab)&&(!q||(d.nm+d.sp+d.memo+d.xid).toLowerCase().includes(q)));
+ L.sort((a,b)=>hallOf(a.sp).localeCompare(hallOf(b.sp),"ja")||norm(a.sp).localeCompare(norm(b.sp),"ja",{numeric:true}));
+ let h="",last="",left=L.filter(d=>!d.done).length;
+ if(!L.length)h='<p class="sub">まだ登録がありません。上のフォームから追加してください。</p>';
+ else h=`<p class="sub">残り ${left} / ${L.length} 件（配置順に並んでいます）</p>`;
+ for(const d of L){
+  const hl=hallOf(d.sp);if(hl!==last){h+=`<div class="hall">${hl}</div>`;last=hl}
+  const id=d.xid.replace(/^@/,"").trim();
+  h+=`<div class="card item ${d.done?"done":""}"><input type="checkbox" data-c="${d.id}" ${d.done?"checked":""}>
+  <div style="flex:1;min-width:0"><div class="nm"><b>${esc(d.nm)}</b> <span class="sub">${esc(d.day)}</span></div>
+  <div class="sp">${esc(d.sp)||"配置未入力"}</div>
+  ${d.memo?`<div class="sub">${esc(d.memo)}</div>`:""}
+  <div style="margin-top:4px">${id?`<a href="https://x.com/${encodeURIComponent(id)}" target="_blank" rel="noopener">𝕏 @${esc(id)}</a> `:""}
+  <button class="sm" data-e="${d.id}">編集</button> <button class="sm" data-d="${d.id}">削除</button></div></div></div>`;
+ }
+ $("list").innerHTML=h;
+}
+function reset(){edit=null;["nm","sp","xid","memo"].forEach(i=>$(i).value="");$("save").textContent="追加";$("cancel").hidden=true;$("addttl").textContent="サークルを追加"}
+$("save").onclick=()=>{
+ const nm=$("nm").value.trim();if(!nm){$("nm").focus();return}
+ const o={nm,day:$("day").value,sp:$("sp").value.trim(),xid:$("xid").value.trim(),memo:$("memo").value.trim()};
+ if(edit){Object.assign(data.find(d=>d.id===edit),o)}else data.push({id:Date.now()+""+Math.random().toString(36).slice(2,5),done:false,ev,...o});
+ store();reset();render();
+};
+$("cancel").onclick=reset;$("q").oninput=render;
+document.addEventListener("click",e=>{
+ const t=e.target.dataset;
+ if(t.t){tab=t.t;render()}
+ if(t.d&&confirm("削除しますか？")){data=data.filter(d=>d.id!==t.d);store();render()}
+ if(t.e){const d=data.find(x=>x.id===t.e);edit=d.id;$("nm").value=d.nm;$("day").value=d.day;$("sp").value=d.sp;$("xid").value=d.xid;$("memo").value=d.memo;
+  $("save").textContent="保存";$("cancel").hidden=false;$("addttl").textContent="サークルを編集";$("addbox").open=true;scrollTo(0,0)}
+});
+document.addEventListener("change",e=>{if(e.target.id==="ev"){ev=e.target.value;tab="all";reset();try{localStorage.setItem(KE,ev)}catch(x){}render();return}if(e.target.dataset.c){const d=data.find(x=>x.id===e.target.dataset.c);d.done=e.target.checked;store();render()}});
+$("exp").onclick=()=>{$("io").value=JSON.stringify(data);$("io").select()};
+$("imp").onclick=()=>{try{const a=JSON.parse($("io").value);if(!Array.isArray(a))throw 0;if(confirm("現在のデータを置き換えますか？")){data=a;data.forEach(d=>{if(!d.ev)d.ev=EVENTS[0].id});store();render()}}catch(e){alert("読み込めませんでした。書き出した文字列をそのまま貼り付けてください。")}};
+render();
+</script></body></html>
